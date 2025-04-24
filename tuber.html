@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
-    /* Custom styles for progress bar and list */
+    /* Custom styles for progress bar, list, and error */
     .progress-container {
       width: 100%;
       height: 8px;
@@ -27,10 +27,39 @@
     .list-item.current {
       color: #48bb78;
     }
+    .error-container {
+      transition: opacity 0.3s ease;
+    }
   </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col items-center min-h-screen p-4">
   <div class="w-full max-w-2xl flex flex-col gap-4">
+    <!-- Error Message Container -->
+    <div id="errorContainer" class="error-container hidden opacity-0 bg-red-600 text-white p-2 rounded-md flex justify-between items-center">
+      <span id="errorMessage"></span>
+      <button id="dismissError" class="text-white hover:text-gray-200">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- URL Input Container -->
+    <div class="flex">
+      <input
+        id="urlInput"
+        type="text"
+        placeholder="Paste YouTube URL (e.g., https://youtu.be/0swy-gXNzxs)"
+        class="w-full p-2 bg-gray-800 border border-gray-700 rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500"
+      />
+      <button
+        id="loadUrlBtn"
+        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-r-md"
+      >
+        Load
+      </button>
+    </div>
+
     <!-- Search Container -->
     <div class="flex">
       <input
@@ -90,8 +119,8 @@
   </div>
 
   <script>
-    // YouTube API key (replace with your own)
-    const API_KEY = 'AIzaSyChP8GRpZH-xUhuSGmiqEC_pM2Oc-TDbvM';
+    // YouTube API key (replace with your own for search functionality)
+    const API_KEY = 'YOUR_API_KEY';
     // YouTube IFrame Player
     let player;
     // Playlist data
@@ -107,7 +136,8 @@
         width: '100%',
         events: {
           'onReady': onPlayerReady,
-          'onStateChange': onPlayerStateChange
+          'onStateChange': onPlayerStateChange,
+          'onError': onPlayerError
         }
       });
     }
@@ -135,12 +165,95 @@
       }
     }
 
+    // Handle player errors
+    function onPlayerError(event) {
+      const errorCode = event.data;
+      let message = 'An error occurred while playing the video';
+      switch (errorCode) {
+        case 2:
+          message = 'Invalid video ID';
+          break;
+        case 5:
+          message = 'The video cannot be played (HTML5 player error)';
+          break;
+        case 100:
+          message = 'The video is not found or has been removed';
+          break;
+        case 101:
+        case 150:
+          message = 'The video is restricted or not playable (e.g., embedding disabled)';
+          break;
+      }
+      showError(message);
+    }
+
+    // Show error message
+    function showError(message) {
+      const errorContainer = document.getElementById('errorContainer');
+      const errorMessage = document.getElementById('errorMessage');
+      errorMessage.textContent = message;
+      errorContainer.classList.remove('hidden', 'opacity-0');
+      errorContainer.classList.add('opacity-100');
+      // Auto-hide after 5 seconds
+      setTimeout(hideError, 5000);
+    }
+
+    // Hide error message
+    function hideError() {
+      const errorContainer = document.getElementById('errorContainer');
+      errorContainer.classList.remove('opacity-100');
+      errorContainer.classList.add('opacity-0');
+      setTimeout(() => errorContainer.classList.add('hidden'), 300);
+    }
+
+    // Parse YouTube URL to extract video ID
+    function parseYouTubeURL(url) {
+      const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+      const match = url.match(regex);
+      return match ? match[1] : null;
+    }
+
+    // Load video from URL
+    function loadVideoFromURL(url) {
+      clearError();
+      const videoId = parseYouTubeURL(url);
+      if (!videoId) {
+        showError('Invalid YouTube URL. Please provide a valid YouTube video link.');
+        return;
+      }
+      // Add video to playlist without API call
+      const video = {
+        id: videoId,
+        title: 'Video from URL',
+        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+      };
+      playlist.push(video);
+      displaySearchResults();
+      // Clear input
+      document.getElementById('urlInput').value = '';
+      // Optionally play immediately
+      // playSong(playlist.length - 1);
+    }
+
     // Search YouTube videos
     async function searchVideos(query) {
+      clearError();
+      if (!query) {
+        showError('Please enter a search query.');
+        return;
+      }
+      if (!API_KEY || API_KEY === 'YOUR_API_KEY') {
+        showError('Search functionality requires a valid YouTube Data API key.');
+        return;
+      }
       try {
         const response = await fetch(
           `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&maxResults=30&type=video&key=${API_KEY}`
         );
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error.message || 'Failed to fetch search results');
+        }
         const data = await response.json();
         if (data.items) {
           playlist = data.items.map(item => ({
@@ -150,10 +263,26 @@
           }));
           currentIndex = -1;
           displaySearchResults();
+        } else {
+          showError('No search results found.');
         }
       } catch (error) {
         console.error('Error fetching search results:', error);
+        let message = 'An error occurred while searching.';
+        if (error.message.includes('quota')) {
+          message = 'API quota exceeded. Please try again later.';
+        } else if (error.message.includes('API key')) {
+          message = 'Invalid or missing API key for search.';
+        } else if (error.message.includes('network')) {
+          message = 'Network error. Please check your connection.';
+        }
+        showError(message);
       }
+    }
+
+    // Clear error before new action
+    function clearError() {
+      hideError();
     }
 
     // Display search results
@@ -167,7 +296,10 @@
           <img src="${item.thumbnail}" alt="Thumbnail" class="w-16 h-9 object-cover rounded">
           <span class="truncate">${item.title}</span>
         `;
-        li.addEventListener('click', () => playSong(index));
+        li.addEventListener('click', () => {
+          clearError();
+          playSong(index);
+        });
         searchResults.appendChild(li);
       });
     }
@@ -183,6 +315,7 @@
 
     // Play previous song
     function playPrev() {
+      clearError();
       if (currentIndex > 0) {
         playSong(currentIndex - 1);
       }
@@ -190,6 +323,7 @@
 
     // Play next song
     function playNext() {
+      clearError();
       if (currentIndex < playlist.length - 1) {
         playSong(currentIndex + 1);
       }
@@ -197,6 +331,7 @@
 
     // Toggle play/pause
     function togglePlayPause() {
+      clearError();
       if (player.getPlayerState() === YT.PlayerState.PLAYING) {
         player.pauseVideo();
       } else {
@@ -238,6 +373,7 @@
 
     // Seek to position
     function seekTo(event) {
+      clearError();
       const progressContainer = document.getElementById('progressContainer');
       const rect = progressContainer.getBoundingClientRect();
       const pos = (event.clientX - rect.left) / rect.width;
@@ -246,22 +382,39 @@
     }
 
     // Event listeners
+    document.getElementById('loadUrlBtn').addEventListener('click', () => {
+      const url = document.getElementById('urlInput').value.trim();
+      if (url) {
+        loadVideoFromURL(url);
+      } else {
+        showError('Please enter a YouTube URL.');
+      }
+    });
+
+    document.getElementById('urlInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const url = e.target.value.trim();
+        if (url) {
+          loadVideoFromURL(url);
+        } else {
+          showError('Please enter a YouTube URL.');
+        }
+      }
+    });
+
     document.getElementById('searchBtn').addEventListener('click', () => {
       const query = document.getElementById('searchInput').value.trim();
-      if (query) {
-        searchVideos(query);
-      }
+      searchVideos(query);
     });
 
     document.getElementById('searchInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         const query = e.target.value.trim();
-        if (query) {
-          searchVideos(query);
-        }
+        searchVideos(query);
       }
     });
 
+    document.getElementById('dismissError').addEventListener('click', hideError);
     document.getElementById('prevBtn').addEventListener('click', playPrev);
     document.getElementById('nextBtn').addEventListener('click', playNext);
     document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
