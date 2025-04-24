@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Web App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <style>
+    /* Custom styles for progress bar and list */
+    .progress-container {
+      width: 100%;
+      height: 8px;
+      background-color: #4a5568;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .progress-bar {
+      height: 100%;
+      background-color: #48bb78;
+      border-radius: 4px;
+      transition: width 0.1s linear;
+    }
+    .list-item:hover {
+      background-color: #2d3748;
+    }
+    .list-item.current {
+      color: #48bb78;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center min-h-screen p-4">
+  <div class="w-full max-w-2xl flex flex-col gap-4">
+    <!-- Search Container -->
+    <div class="flex">
+      <input
+        id="searchInput"
+        type="text"
+        placeholder="Search for music on YouTube..."
+        class="w-full p-2 bg-gray-800 border border-gray-700 rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500"
+      />
+      <button
+        id="searchBtn"
+        class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-r-md"
+      >
+        Search
+      </button>
+    </div>
+
+    <!-- Thumbnail Container -->
+    <div id="player" class="w-full aspect-video bg-gray-800 rounded-md"></div>
+
+    <!-- Time Container -->
+    <div class="flex justify-between text-sm">
+      <span id="currentTime">0:00</span>
+      <span id="duration">0:00</span>
+    </div>
+
+    <!-- Progress Container -->
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+    </div>
+
+    <!-- Control Container -->
+    <div class="flex justify-center gap-4">
+      <button id="prevBtn" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+        </svg>
+      </button>
+      <button id="playPauseBtn" class="p-2 bg-green-600 hover:bg-green-700 rounded-full">
+        <svg id="playIcon" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        <svg id="pauseIcon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+      </button>
+      <button id="nextBtn" class="p-2 bg-gray-700 hover:bg-gray-600 rounded-full">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M18 6h-2v12h2zm-3.5 6l-8.5 6V6z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Search Results List Container -->
+    <div class="max-h-96 overflow-y-auto bg-gray-800 rounded-md">
+      <ul id="searchResults" class="divide-y divide-gray-700"></ul>
+    </div>
+  </div>
+
+  <script>
+    // YouTube API key (replace with your own)
+    const API_KEY = 'YOUR_API_KEY';
+    // YouTube IFrame Player
+    let player;
+    // Playlist data
+    let playlist = [];
+    let currentIndex = -1;
+    // Progress update interval
+    let progressInterval;
+
+    // Initialize YouTube IFrame Player
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        height: '100%',
+        width: '100%',
+        events: {
+          'onReady': onPlayerReady,
+          'onStateChange': onPlayerStateChange
+        }
+      });
+    }
+
+    // When player is ready
+    function onPlayerReady(event) {
+      updateDuration();
+      startProgressUpdate();
+    }
+
+    // Handle player state changes
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.PLAYING) {
+        document.getElementById('playIcon').classList.add('hidden');
+        document.getElementById('pauseIcon').classList.remove('hidden');
+        startProgressUpdate();
+      } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+        document.getElementById('playIcon').classList.remove('hidden');
+        document.getElementById('pauseIcon').classList.add('hidden');
+        stopProgressUpdate();
+      }
+      if (event.data === YT.PlayerState.ENDED && currentIndex < playlist.length - 1) {
+        // Auto-play next song
+        playNext();
+      }
+    }
+
+    // Search YouTube videos
+    async function searchVideos(query) {
+      try {
+        const response = await fetch(
+          `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&maxResults=30&type=video&key=${API_KEY}`
+        );
+        const data = await response.json();
+        if (data.items) {
+          playlist = data.items.map(item => ({
+            id: item.id.videoId,
+            title: item.snippet.title,
+            thumbnail: item.snippet.thumbnails.medium.url
+          }));
+          currentIndex = -1;
+          displaySearchResults();
+        }
+      } catch (error) {
+        console.error('Error fetching search results:', error);
+      }
+    }
+
+    // Display search results
+    function displaySearchResults() {
+      const searchResults = document.getElementById('searchResults');
+      searchResults.innerHTML = '';
+      playlist.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.className = `list-item p-2 cursor-pointer flex items-center gap-2 ${index === currentIndex ? 'current' : ''}`;
+        li.innerHTML = `
+          <img src="${item.thumbnail}" alt="Thumbnail" class="w-16 h-9 object-cover rounded">
+          <span class="truncate">${item.title}</span>
+        `;
+        li.addEventListener('click', () => playSong(index));
+        searchResults.appendChild(li);
+      });
+    }
+
+    // Play a song by index
+    function playSong(index) {
+      if (index >= 0 && index < playlist.length) {
+        currentIndex = index;
+        player.loadVideoById(playlist[index].id);
+        displaySearchResults(); // Update highlight
+      }
+    }
+
+    // Play previous song
+    function playPrev() {
+      if (currentIndex > 0) {
+        playSong(currentIndex - 1);
+      }
+    }
+
+    // Play next song
+    function playNext() {
+      if (currentIndex < playlist.length - 1) {
+        playSong(currentIndex + 1);
+      }
+    }
+
+    // Toggle play/pause
+    function togglePlayPause() {
+      if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+        player.pauseVideo();
+      } else {
+        player.playVideo();
+      }
+    }
+
+    // Format time (mm:ss)
+    function formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      seconds = Math.floor(seconds % 60);
+      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+
+    // Update duration display
+    function updateDuration() {
+      const duration = player.getDuration();
+      document.getElementById('duration').textContent = formatTime(duration);
+    }
+
+    // Start progress update
+    function startProgressUpdate() {
+      stopProgressUpdate();
+      progressInterval = setInterval(() => {
+        const currentTime = player.getCurrentTime();
+        const duration = player.getDuration();
+        const progress = (currentTime / duration) * 100;
+        document.getElementById('progressBar').style.width = `${progress}%`;
+        document.getElementById('currentTime').textContent = formatTime(currentTime);
+      }, 1000);
+    }
+
+    // Stop progress update
+    function stopProgressUpdate() {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+    }
+
+    // Seek to position
+    function seekTo(event) {
+      const progressContainer = document.getElementById('progressContainer');
+      const rect = progressContainer.getBoundingClientRect();
+      const pos = (event.clientX - rect.left) / rect.width;
+      const duration = player.getDuration();
+      player.seekTo(pos * duration, true);
+    }
+
+    // Event listeners
+    document.getElementById('searchBtn').addEventListener('click', () => {
+      const query = document.getElementById('searchInput').value.trim();
+      if (query) {
+        searchVideos(query);
+      }
+    });
+
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const query = e.target.value.trim();
+        if (query) {
+          searchVideos(query);
+        }
+      }
+    });
+
+    document.getElementById('prevBtn').addEventListener('click', playPrev);
+    document.getElementById('nextBtn').addEventListener('click', playNext);
+    document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
+    document.getElementById('progressContainer').addEventListener('click', seekTo);
+  </script>
+</body>
+</html>
