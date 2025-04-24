@@ -44,35 +44,19 @@
       </button>
     </div>
 
-    <!-- URL Input Container -->
+    <!-- Unified Input Container -->
     <div class="flex">
       <input
-        id="urlInput"
+        id="unifiedInput"
         type="text"
-        placeholder="Paste YouTube URL (e.g., https://youtu.be/0swy-gXNzxs)"
-        class="w-full p-2 bg-gray-800 border border-gray-700 rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500"
+        placeholder="Enter a YouTube URL or search for music..."
+        class="w-full p-2 bg-gray-800 border border-gray-700 rounded-l-md focus:outline-none focus:ring-2 focus:ring-teal-500"
       />
       <button
-        id="loadUrlBtn"
-        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-r-md"
+        id="unifiedBtn"
+        class="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-r-md"
       >
-        Load
-      </button>
-    </div>
-
-    <!-- Search Container -->
-    <div class="flex">
-      <input
-        id="searchInput"
-        type="text"
-        placeholder="Search for music on YouTube..."
-        class="w-full p-2 bg-gray-800 border border-gray-700 rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500"
-      />
-      <button
-        id="searchBtn"
-        class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-r-md"
-      >
-        Search
+        Go
       </button>
     </div>
 
@@ -206,16 +190,25 @@
       setTimeout(() => errorContainer.classList.add('hidden'), 300);
     }
 
+    // Clear error before new action
+    function clearError() {
+      hideError();
+    }
+
     // Parse YouTube URL to extract video ID
-    function parseYouTubeURL(url) {
+    function parseYouTubeURL(input) {
       const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
-      const match = url.match(regex);
+      const match = input.match(regex);
       return match ? match[1] : null;
+    }
+
+    // Check if input is a URL
+    function isYouTubeURL(input) {
+      return input.includes('youtube.com') || input.includes('youtu.be');
     }
 
     // Load video from URL
     function loadVideoFromURL(url) {
-      clearError();
       const videoId = parseYouTubeURL(url);
       if (!videoId) {
         showError('Invalid YouTube URL. Please provide a valid YouTube video link.');
@@ -230,16 +223,15 @@
       playlist.push(video);
       displaySearchResults();
       // Clear input
-      document.getElementById('urlInput').value = '';
+      document.getElementById('unifiedInput').value = '';
       // Optionally play immediately
       // playSong(playlist.length - 1);
     }
 
     // Search YouTube videos
     async function searchVideos(query) {
-      clearError();
       if (!query) {
-        showError('Please enter a search query.');
+        showError('Please enter a search query or a YouTube URL.');
         return;
       }
       if (!API_KEY || API_KEY === 'YOUR_API_KEY') {
@@ -278,11 +270,22 @@
         }
         showError(message);
       }
+      // Clear input
+      document.getElementById('unifiedInput').value = '';
     }
 
-    // Clear error before new action
-    function clearError() {
-      hideError();
+    // Handle unified input
+    function handleUnifiedInput(input) {
+      clearError();
+      if (!input) {
+        showError('Please enter a YouTube URL or a search query.');
+        return;
+      }
+      if (isYouTubeURL(input)) {
+        loadVideoFromURL(input);
+      } else {
+        searchVideos(input);
+      }
     }
 
     // Display search results
@@ -382,41 +385,21 @@
     }
 
     // Event listeners
-    document.getElementById('loadUrlBtn').addEventListener('click', () => {
-      const url = document.getElementById('urlInput').value.trim();
-      if (url) {
-        loadVideoFromURL(url);
-      } else {
-        showError('Please enter a YouTube URL.');
-      }
+    document.getElementById('unifiedBtn').addEventListener('click', () => {
+      const input = document.getElementById('unifiedInput').value.trim();
+      handleUnifiedInput(input);
     });
 
-    document.getElementById('urlInput').addEventListener('keypress', (e) => {
+    document.getElementById('unifiedInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        const url = e.target.value.trim();
-        if (url) {
-          loadVideoFromURL(url);
-        } else {
-          showError('Please enter a YouTube URL.');
-        }
-      }
-    });
-
-    document.getElementById('searchBtn').addEventListener('click', () => {
-      const query = document.getElementById('searchInput').value.trim();
-      searchVideos(query);
-    });
-
-    document.getElementById('searchInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        const query = e.target.value.trim();
-        searchVideos(query);
+        const input = e.target.value.trim();
+        handleUnifiedInput(input);
       }
     });
 
     document.getElementById('dismissError').addEventListener('click', hideError);
     document.getElementById('prevBtn').addEventListener('click', playPrev);
-    document.getElementById('nextBtn').addEventListener('click', playNext);
+    document.getElementById('nextBtn').addEventListener('click', FplayNext);
     document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
     document.getElementById('progressContainer').addEventListener('click', seekTo);
   </script>
