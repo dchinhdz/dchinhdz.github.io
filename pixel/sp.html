@@ -5,42 +5,161 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sprite Editor</title>
 <style>
-  body { font-family: system-ui, sans-serif; background:#fafafa; margin:20px; }
-  h1 { margin-bottom:10px; }
-  #canvasWrap { margin-bottom:20px; }
-  canvas { border:1px solid #ccc; background:#fff; display:block; max-width:100%; }
-  #controls { display:flex; flex-direction:column; gap:8px; }
-  .itemCtrl {
-    background:#fff;
-    border:1px solid #ccc;
-    padding:8px;
-    border-radius:5px;
-    display:flex;
-    flex-wrap:wrap;
-    align-items:center;
-    gap:6px;
-  }
-  .itemCtrl.maxItem { background:#e6f0ff; font-weight:600; }
-  .itemCtrl label { margin-right:6px; }
-  input[type="number"] { width:60px; }
-  input[type="range"] { width:100px; }
-  button { padding:6px 12px; cursor:pointer; margin-right:6px; }
+:root {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --accent: #007aff;
+  --accent-light: #e6f0ff;
+  --border: #dcdfe3;
+  --text: #333;
+  --danger: #ff4d4d;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+header {
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 16px;
+  text-align: center;
+  font-weight: 600;
+  letter-spacing: .5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+main {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#canvasWrap {
+  background: var(--panel);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  padding: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+canvas {
+  border: 1px solid var(--border);
+  max-width: 100%;
+  background: #fff;
+  border-radius: 6px;
+}
+.controls-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #fff;
+  transition: background .2s;
+}
+button:active { transform: scale(0.97); }
+#autoTrim { background: #00c26e; }
+#refresh { background: #ffaa00; }
+#download { background: var(--accent); }
+#fileInput {
+  padding: 6px;
+  width: 100%;
+  background: var(--panel);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+#controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.itemCtrl {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.itemCtrl.maxItem {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.itemCtrl label {
+  flex: 1 1 100%;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: var(--accent);
+}
+input[type="number"], input[type="range"] {
+  flex: 1;
+  min-width: 60px;
+}
+input[type="number"] {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px;
+  width: 70px;
+}
+input[type="range"] { accent-color: var(--accent); }
+.itemCtrl span {
+  font-size: 13px;
+  color: #666;
+}
+.removeBtn {
+  background: var(--danger);
+  border: none;
+  color: #fff;
+  font-weight: bold;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 22px;
+}
+.removeBtn:active { transform: scale(0.95); }
+
+/* Responsive */
+@media (max-width: 600px) {
+  main { padding: 12px; }
+  button { flex: 1 1 calc(33% - 8px); font-size: 13px; }
+  .controls-top { gap: 6px; }
+  input[type="number"] { width: 50px; }
+}
 </style>
 </head>
 <body>
 
-<h1>Sprite Editor</h1>
+<header>🎨 Sprite Editor</header>
+<main>
+  <input type="file" id="fileInput" multiple accept="image/*">
+  <div id="canvasWrap"><canvas id="canvas"></canvas></div>
 
-<input type="file" id="fileInput" multiple accept="image/*">
-<div id="canvasWrap"><canvas id="canvas"></canvas></div>
+  <div class="controls-top">
+    <button id="autoTrim">Auto Trim</button>
+    <button id="refresh">Reset Layout</button>
+    <button id="download">Download</button>
+  </div>
 
-<div style="margin-bottom:10px;">
-  <button id="autoTrim">Auto Trim Transparent</button>
-  <button id="refresh">Refresh</button>
-  <button id="download">Download PNG</button>
-</div>
-
-<div id="controls"></div>
+  <div id="controls"></div>
+</main>
 
 <script>
 const fileInput = document.getElementById('fileInput');
@@ -49,7 +168,7 @@ const ctx = canvas.getContext('2d');
 const controlsBox = document.getElementById('controls');
 
 let items = [];
-let originals = []; // để refresh lại
+let originals = [];
 
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -57,121 +176,114 @@ function render() {
 }
 
 async function loadImages(files) {
-  items = [];
+  if (!files.length) return;
   const imgs = [];
   for (const f of files) {
     if (!f.type.startsWith('image/')) continue;
     const img = new Image();
     img.src = URL.createObjectURL(f);
     await new Promise(r => img.onload = r);
-    imgs.push({ name:f.name, img });
+    imgs.push({ name: f.name, img });
   }
   if (!imgs.length) return;
 
-  const maxW = Math.max(...imgs.map(i=>i.img.width));
+  const maxW = Math.max(...imgs.map(i => i.img.width));
   const totalH = imgs.reduce((a,b)=>a+b.img.height,0);
   canvas.width = maxW;
   canvas.height = totalH;
-  controlsBox.innerHTML = '';
-  let y = 0;
 
-  imgs.forEach((o,i)=>{
+  let y = 0;
+  const newItems = imgs.map(o => {
     const it = { name:o.name, img:o.img, x:(maxW-o.img.width)/2, y };
     y += o.img.height;
-    items.push(it);
+    return it;
   });
 
-  // Sao lưu để refresh
+  items = items.concat(newItems);
   originals = items.map(i => ({...i}));
-
-  const maxWidth = maxW;
-  items.forEach((it,i)=>{
-    addItemControl(it,i, it.img.width === maxWidth);
-  });
-
+  refreshControls();
   render();
 }
 
-function addItemControl(item, idx, isMax) {
-  const div = document.createElement('div');
-  div.className = 'itemCtrl' + (isMax ? ' maxItem' : '');
-  div.innerHTML = `
+function refreshControls() {
+  controlsBox.innerHTML = '';
+  if (!items.length) return;
+  const maxW = Math.max(...items.map(i => i.img.width));
+  items.forEach((it,i)=>addItemControl(it,i,it.img.width===maxW));
+}
+
+function addItemControl(item, idx, isMax){
+  const div=document.createElement('div');
+  div.className='itemCtrl'+(isMax?' maxItem':'');
+  div.innerHTML=`
     <label>${item.name}</label>
-    ${!isMax ? `
+    ${!isMax?`
       X:<input type="range" min="0" max="${canvas.width}" value="${item.x}" id="xr${idx}">
       <input type="number" value="${item.x}" id="xn${idx}">
-    ` : `<span style="color:#666;">(X locked)</span>`}
+    `:`<span>(X locked)</span>`}
     Y:<input type="range" min="0" max="${canvas.height}" value="${item.y}" id="yr${idx}">
     <input type="number" value="${item.y}" id="yn${idx}">
-    <span id="pos${idx}">→ (${item.x}, ${item.y})</span>
+    <span id="pos${idx}">(${item.x}, ${item.y})</span>
+    <button class="removeBtn" title="Xóa">×</button>
   `;
   controlsBox.appendChild(div);
 
-  const xr = div.querySelector(`#xr${idx}`);
-  const xn = div.querySelector(`#xn${idx}`);
-  const yr = div.querySelector(`#yr${idx}`);
-  const yn = div.querySelector(`#yn${idx}`);
-  const pos = div.querySelector(`#pos${idx}`);
+  const xr=div.querySelector(`#xr${idx}`);
+  const xn=div.querySelector(`#xn${idx}`);
+  const yr=div.querySelector(`#yr${idx}`);
+  const yn=div.querySelector(`#yn${idx}`);
+  const pos=div.querySelector(`#pos${idx}`);
+  const removeBtn=div.querySelector('.removeBtn');
 
-  function updateX(v){
-    item.x = Number(v);
-    if(xr) xr.value = xn.value = v;
-    pos.textContent = `→ (${item.x}, ${item.y})`;
-    render();
-  }
-  function updateY(v){
-    item.y = Number(v);
-    yr.value = yn.value = v;
-    pos.textContent = `→ (${item.x}, ${item.y})`;
-    render();
-  }
+  function updateX(v){item.x=+v;if(xr)xr.value=xn.value=v;pos.textContent=`(${item.x},${item.y})`;render();}
+  function updateY(v){item.y=+v;yr.value=yn.value=v;pos.textContent=`(${item.x},${item.y})`;render();}
+  if(!isMax){xr.oninput=e=>updateX(e.target.value);xn.oninput=e=>updateX(e.target.value);}
+  yr.oninput=e=>updateY(e.target.value);yn.oninput=e=>updateY(e.target.value);
 
-  if(!isMax){
-    xr.oninput = e => updateX(e.target.value);
-    xn.oninput = e => updateX(e.target.value);
-  }
-  yr.oninput = e => updateY(e.target.value);
-  yn.oninput = e => updateY(e.target.value);
+  removeBtn.onclick=()=>{
+    items=items.filter(i=>i!==item);
+    originals=originals.filter(o=>o.name!==item.name);
+    refreshControls();
+    render();
+  };
 }
 
-// Auto trim transparent
-document.getElementById('autoTrim').addEventListener('click', ()=>{
-  const w=canvas.width, h=canvas.height;
+// Auto Trim
+document.getElementById('autoTrim').addEventListener('click',()=>{
+  const w=canvas.width,h=canvas.height;
   const imgData=ctx.getImageData(0,0,w,h);
-  const data=imgData.data;
+  const d=imgData.data;
   let top=h,left=w,right=0,bottom=0,found=false;
   for(let y=0;y<h;y++){
     for(let x=0;x<w;x++){
-      const a=data[(y*w+x)*4+3];
-      if(a>0){
-        found=true;
-        if(x<left) left=x;
-        if(x>right) right=x;
-        if(y<top) top=y;
-        if(y>bottom) bottom=y;
+      const a=d[(y*w+x)*4+3];
+      if(a>0){found=true;
+        if(x<left)left=x;if(x>right)right=x;
+        if(y<top)top=y;if(y>bottom)bottom=y;
       }
     }
   }
-  if(!found) return alert('Không tìm thấy pixel nào!');
-  const trimW=right-left+1, trimH=bottom-top+1;
+  if(!found)return alert('Không tìm thấy pixel nào!');
+  const trimW=right-left+1,trimH=bottom-top+1;
   const trimmed=ctx.getImageData(left,top,trimW,trimH);
-  canvas.width=trimW; canvas.height=trimH;
+  canvas.width=trimW;canvas.height=trimH;
   ctx.putImageData(trimmed,0,0);
-  items.forEach(it=>{ it.x-=left; it.y-=top; });
+  items.forEach(it=>{it.x-=left;it.y-=top;});
   render();
 });
 
-// Refresh canvas về trạng thái ban đầu
-document.getElementById('refresh').addEventListener('click', ()=>{
-  if(!originals.length) return;
-  items = originals.map(o => ({...o}));
-  controlsBox.innerHTML = '';
-  const maxW = Math.max(...items.map(i=>i.img.width));
-  items.forEach((it,i)=>addItemControl(it,i,it.img.width===maxW));
+// Reset Layout
+document.getElementById('refresh').addEventListener('click',()=>{
+  if(!originals.length)return;
+  const maxW=Math.max(...originals.map(i=>i.img.width));
+  const totalH=originals.reduce((a,b)=>a+b.img.height,0);
+  canvas.width=maxW;canvas.height=totalH;
+  items=originals.map(o=>({...o}));
+  refreshControls();
   render();
 });
 
-// Download PNG
+// Download
 document.getElementById('download').addEventListener('click',()=>{
   canvas.toBlob(blob=>{
     const a=document.createElement('a');
@@ -182,7 +294,8 @@ document.getElementById('download').addEventListener('click',()=>{
   });
 });
 
-fileInput.addEventListener('change', e=>loadImages(e.target.files));
+fileInput.addEventListener('change',e=>loadImages(e.target.files));
 </script>
 </body>
 </html>
+
