@@ -7,39 +7,49 @@
 <style>
   body { font-family: system-ui, sans-serif; background:#fafafa; margin:20px; }
   h1 { margin-bottom:10px; }
-  #controls { margin-top:15px; display:flex; flex-direction:column; gap:8px; }
+  #canvasWrap { margin-bottom:20px; }
+  canvas { border:1px solid #ccc; background:#fff; display:block; max-width:100%; }
+  #controls { display:flex; flex-direction:column; gap:8px; }
   .itemCtrl {
-    background:#fff; border:1px solid #ccc; padding:8px; border-radius:5px;
-    display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+    background:#fff;
+    border:1px solid #ccc;
+    padding:8px;
+    border-radius:5px;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:6px;
   }
-  .itemCtrl label { font-weight:bold; margin-right:6px; }
+  .itemCtrl.maxItem { background:#e6f0ff; font-weight:600; }
+  .itemCtrl label { margin-right:6px; }
   input[type="number"] { width:60px; }
   input[type="range"] { width:100px; }
-  #canvasWrap { margin-top:20px; }
-  canvas { border:1px solid #ccc; background:#fff; display:block; max-width:100%; }
-  button { padding:6px 12px; cursor:pointer; }
+  button { padding:6px 12px; cursor:pointer; margin-right:6px; }
 </style>
 </head>
 <body>
 
 <h1>Sprite Editor</h1>
-<input type="file" id="fileInput" multiple accept="image/*"><br>
-<div id="controls"></div>
-<div style="margin-top:10px;">
+
+<input type="file" id="fileInput" multiple accept="image/*">
+<div id="canvasWrap"><canvas id="canvas"></canvas></div>
+
+<div style="margin-bottom:10px;">
   <button id="autoTrim">Auto Trim Transparent</button>
+  <button id="refresh">Refresh</button>
   <button id="download">Download PNG</button>
 </div>
 
-<div id="canvasWrap">
-  <canvas id="canvas"></canvas>
-</div>
+<div id="controls"></div>
 
 <script>
 const fileInput = document.getElementById('fileInput');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const controlsBox = document.getElementById('controls');
+
 let items = [];
+let originals = []; // để refresh lại
 
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -57,55 +67,79 @@ async function loadImages(files) {
     imgs.push({ name:f.name, img });
   }
   if (!imgs.length) return;
+
   const maxW = Math.max(...imgs.map(i=>i.img.width));
   const totalH = imgs.reduce((a,b)=>a+b.img.height,0);
   canvas.width = maxW;
   canvas.height = totalH;
   controlsBox.innerHTML = '';
   let y = 0;
+
   imgs.forEach((o,i)=>{
     const it = { name:o.name, img:o.img, x:(maxW-o.img.width)/2, y };
-    items.push(it);
     y += o.img.height;
-    addItemControl(it,i);
+    items.push(it);
   });
+
+  // Sao lưu để refresh
+  originals = items.map(i => ({...i}));
+
+  const maxWidth = maxW;
+  items.forEach((it,i)=>{
+    addItemControl(it,i, it.img.width === maxWidth);
+  });
+
   render();
 }
 
-function addItemControl(item, idx) {
+function addItemControl(item, idx, isMax) {
   const div = document.createElement('div');
-  div.className = 'itemCtrl';
+  div.className = 'itemCtrl' + (isMax ? ' maxItem' : '');
   div.innerHTML = `
     <label>${item.name}</label>
-    X:<input type="range" min="0" max="${canvas.width}" value="${item.x}" id="xr${idx}">
-    <input type="number" value="${item.x}" id="xn${idx}">
+    ${!isMax ? `
+      X:<input type="range" min="0" max="${canvas.width}" value="${item.x}" id="xr${idx}">
+      <input type="number" value="${item.x}" id="xn${idx}">
+    ` : `<span style="color:#666;">(X locked)</span>`}
     Y:<input type="range" min="0" max="${canvas.height}" value="${item.y}" id="yr${idx}">
     <input type="number" value="${item.y}" id="yn${idx}">
     <span id="pos${idx}">→ (${item.x}, ${item.y})</span>
   `;
   controlsBox.appendChild(div);
 
-  const xr=div.querySelector(`#xr${idx}`), yr=div.querySelector(`#yr${idx}`);
-  const xn=div.querySelector(`#xn${idx}`), yn=div.querySelector(`#yn${idx}`);
-  const pos=div.querySelector(`#pos${idx}`);
+  const xr = div.querySelector(`#xr${idx}`);
+  const xn = div.querySelector(`#xn${idx}`);
+  const yr = div.querySelector(`#yr${idx}`);
+  const yn = div.querySelector(`#yn${idx}`);
+  const pos = div.querySelector(`#pos${idx}`);
 
-  function updateX(v){ item.x=Number(v); xr.value=xn.value=v; pos.textContent=`→ (${item.x}, ${item.y})`; render(); }
-  function updateY(v){ item.y=Number(v); yr.value=yn.value=v; pos.textContent=`→ (${item.x}, ${item.y})`; render(); }
+  function updateX(v){
+    item.x = Number(v);
+    if(xr) xr.value = xn.value = v;
+    pos.textContent = `→ (${item.x}, ${item.y})`;
+    render();
+  }
+  function updateY(v){
+    item.y = Number(v);
+    yr.value = yn.value = v;
+    pos.textContent = `→ (${item.x}, ${item.y})`;
+    render();
+  }
 
-  xr.oninput=e=>updateX(e.target.value);
-  xn.oninput=e=>updateX(e.target.value);
-  yr.oninput=e=>updateY(e.target.value);
-  yn.oninput=e=>updateY(e.target.value);
+  if(!isMax){
+    xr.oninput = e => updateX(e.target.value);
+    xn.oninput = e => updateX(e.target.value);
+  }
+  yr.oninput = e => updateY(e.target.value);
+  yn.oninput = e => updateY(e.target.value);
 }
 
-fileInput.addEventListener('change', e=>loadImages(e.target.files));
-
-// --------- AUTO TRIM TRANSPARENT ----------
+// Auto trim transparent
 document.getElementById('autoTrim').addEventListener('click', ()=>{
   const w=canvas.width, h=canvas.height;
   const imgData=ctx.getImageData(0,0,w,h);
   const data=imgData.data;
-  let top=h, left=w, right=0, bottom=0, found=false;
+  let top=h,left=w,right=0,bottom=0,found=false;
   for(let y=0;y<h;y++){
     for(let x=0;x<w;x++){
       const a=data[(y*w+x)*4+3];
@@ -123,11 +157,21 @@ document.getElementById('autoTrim').addEventListener('click', ()=>{
   const trimmed=ctx.getImageData(left,top,trimW,trimH);
   canvas.width=trimW; canvas.height=trimH;
   ctx.putImageData(trimmed,0,0);
-  items.forEach(it=>{it.x-=left; it.y-=top;}); // update pos logic nếu cần
+  items.forEach(it=>{ it.x-=left; it.y-=top; });
   render();
 });
 
-// --------- DOWNLOAD PNG ----------
+// Refresh canvas về trạng thái ban đầu
+document.getElementById('refresh').addEventListener('click', ()=>{
+  if(!originals.length) return;
+  items = originals.map(o => ({...o}));
+  controlsBox.innerHTML = '';
+  const maxW = Math.max(...items.map(i=>i.img.width));
+  items.forEach((it,i)=>addItemControl(it,i,it.img.width===maxW));
+  render();
+});
+
+// Download PNG
 document.getElementById('download').addEventListener('click',()=>{
   canvas.toBlob(blob=>{
     const a=document.createElement('a');
@@ -137,6 +181,8 @@ document.getElementById('download').addEventListener('click',()=>{
     URL.revokeObjectURL(a.href);
   });
 });
+
+fileInput.addEventListener('change', e=>loadImages(e.target.files));
 </script>
 </body>
 </html>
