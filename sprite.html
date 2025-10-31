@@ -6,12 +6,14 @@
 <title>Sprite Sheet Generator</title>
 <style>
   body {
-    font-family: sans-serif;
+    font-family: system-ui, sans-serif;
     margin: 20px;
-    background: #f9f9f9;
+    background: #fafafa;
   }
   input, button {
     margin: 10px 5px 10px 0;
+    padding: 6px 10px;
+    cursor: pointer;
   }
   #preview {
     margin-top: 20px;
@@ -47,19 +49,27 @@ const fileInput = document.getElementById('fileInput');
 const previewCanvas = document.getElementById('preview');
 const ctx = previewCanvas.getContext('2d');
 const jsonOutput = document.getElementById('jsonOutput');
+
 let spriteData = {};
 let spriteBlob = null;
+let spriteName = "";
 
-// Convert canvas → Blob
+// Tạo tên ngẫu nhiên
+function randomName() {
+  const n = Math.floor(1000 + Math.random() * 9000);
+  return `sprite_${n}`;
+}
+
+// Chuyển canvas -> Blob
 function canvasToBlob(canvas) {
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 }
 
+// Tạo sprite sheet
 async function generateSprite(files) {
   if (!files.length) return;
 
   const images = [];
-  // Load tất cả ảnh
   for (const file of files) {
     if (!file.type.startsWith('image/')) continue;
     const img = new Image();
@@ -70,47 +80,51 @@ async function generateSprite(files) {
 
   if (!images.length) return;
 
-  // Xác định kích thước tổng
   const maxWidth = Math.max(...images.map(i => i.img.width));
   const totalHeight = images.reduce((sum, i) => sum + i.img.height, 0);
 
   previewCanvas.width = maxWidth;
   previewCanvas.height = totalHeight;
-
   ctx.clearRect(0, 0, maxWidth, totalHeight);
 
   let y = 0;
-  spriteData = {};
+  const items = {};
 
   for (const { name, img } of images) {
     const x = (maxWidth - img.width) / 2;
     ctx.drawImage(img, x, y);
 
-    spriteData[name] = {
-      x: Math.round(x),
-      y: Math.round(y),
-      width: img.width,
-      height: img.height
-    };
+    const cleanName = name.replace(/\.[^/.]+$/, ""); // bỏ đuôi .png, .jpg,...
+    items[cleanName] = [Math.round(x), Math.round(y), img.width, img.height];
     y += img.height;
   }
 
-  jsonOutput.textContent = JSON.stringify(spriteData, null, 2);
+  spriteName = randomName();
 
-  // Tạo blob lưu tạm cho download
+  spriteData = {
+    info: {
+      filename: `${spriteName}.png`,
+      width: maxWidth,
+      height: totalHeight,
+      total_items: images.length
+    },
+    items
+  };
+
+  jsonOutput.textContent = JSON.stringify(spriteData, null, 2);
   spriteBlob = await canvasToBlob(previewCanvas);
 }
 
-// Upload
+// Sự kiện upload
 fileInput.addEventListener('change', e => generateSprite(e.target.files));
 
 // Download PNG
 document.getElementById('downloadImage').addEventListener('click', () => {
-  if (!spriteBlob) return alert('Chưa có sprite sheet, hãy upload ảnh trước.');
+  if (!spriteBlob) return alert('⚠️ Hãy upload ảnh trước khi tải!');
   const url = URL.createObjectURL(spriteBlob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'sprite-sheet.png';
+  a.download = `${spriteName}.png`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -119,12 +133,12 @@ document.getElementById('downloadImage').addEventListener('click', () => {
 
 // Download JSON
 document.getElementById('downloadJSON').addEventListener('click', () => {
-  if (!Object.keys(spriteData).length) return alert('Chưa có dữ liệu JSON.');
+  if (!Object.keys(spriteData).length) return alert('⚠️ Chưa có JSON dữ liệu.');
   const blob = new Blob([JSON.stringify(spriteData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'sprite-sheet.json';
+  a.download = `${spriteName}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
