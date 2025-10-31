@@ -4,9 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sprite Editor</title>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<nav>
+  <a href="sprite.html">Sprite Maker</a>
+  <a href="editor.html" class="active">Sprite Editor</a>
+</nav>
+
 <header>🎨 Sprite Editor</header>
 <main>
   <input type="file" id="fileInput" multiple accept="image/*">
@@ -47,8 +52,11 @@ async function loadImages(files){
   const totalH=imgs.reduce((a,b)=>a+b.img.height,0);
   canvas.width=maxW;canvas.height=totalH;
   let y=0;
-  const newItems=imgs.map((o,i)=>({name:o.name,img:o.img,x:(maxW-o.img.width)/2,y,z:items.length+i}));
-  y+=o.img.height;
+  const newItems=imgs.map((o,i)=>{
+    const it={name:o.name,img:o.img,x:(maxW-o.img.width)/2,y,z:items.length+i};
+    y+=o.img.height;
+    return it;
+  });
   items=items.concat(newItems);
   originals=items.map(i=>({...i}));
   refreshControls(); render();
@@ -93,11 +101,9 @@ function addItemControl(item,idx,isMax){
   const updateX=v=>{item.x=+v;if(xr)xr.value=xn.value=v;render();}
   const updateY=v=>{item.y=+v;yr.value=yn.value=v;render();}
   const updateZ=v=>{item.z=+v;render();refreshControls();}
-
   if(!isMax){xr.oninput=e=>updateX(e.target.value);xn.oninput=e=>updateX(e.target.value);}
   yr.oninput=e=>updateY(e.target.value);yn.oninput=e=>updateY(e.target.value);
   zSel.onchange=e=>updateZ(e.target.value);
-
   rm.onclick=()=>{items=items.filter(i=>i!==item);originals=originals.filter(o=>o.name!==item.name);refreshControls();render();}
 }
 
