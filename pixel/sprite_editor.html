@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Sprite Editor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>🎨 Sprite Editor</header>
+<main>
+  <input type="file" id="fileInput" multiple accept="image/*">
+  <div class="zoomBox">
+    <label>Zoom: <input type="range" id="zoom" min="0.5" max="3" step="0.1" value="1"></label>
+  </div>
+  <div id="canvasWrap"><canvas id="canvas"></canvas></div>
+  <div class="controls-top">
+    <button id="autoTrim">Auto Trim</button>
+    <button id="refresh">Reset</button>
+    <button id="downloadPng">Download</button>
+  </div>
+  <div id="controls"></div>
+</main>
+<script>
+const f=document.getElementById('fileInput'),c=document.getElementById('canvas'),x=c.getContext('2d'),
+z=document.getElementById('zoom'),ctrl=document.getElementById('controls');
+let items=[],base=[],scale=1;
+z.oninput=()=>{scale=parseFloat(z.value);c.style.transform=`scale(${scale})`;c.style.transformOrigin='top center';};
+function draw(){x.clearRect(0,0,c.width,c.height);[...items].sort((a,b)=>a.z-b.z).forEach(i=>x.drawImage(i.img,i.x,i.y));}
+async function load(e){
+  const fs=[...e.target.files].filter(f=>f.type.startsWith('image/')),imgs=[];
+  for(const f of fs){const img=new Image();img.src=URL.createObjectURL(f);await new Promise(r=>img.onload=r);imgs.push({name:f.name,img});}
+  if(!imgs.length)return;
+  const mw=Math.max(...imgs.map(i=>i.img.width)),th=imgs.reduce((a,b)=>a+b.img.height,0);
+  c.width=mw;c.height=th;let y=0;
+  imgs.forEach(o=>{items.push({name:o.name,img:o.img,x:(mw-o.img.width)/2,y,z:items.length});y+=o.img.height;});
+  base=items.map(i=>({...i}));renderCtrl();draw();
+}
+function renderCtrl(){ctrl.innerHTML='';if(!items.length)return;const mw=Math.max(...items.map(i=>i.img.width));
+items.forEach((it,i)=>{const d=document.createElement('div');d.className='itemCtrl'+(it.img.width===mw?' maxItem':'');
+d.innerHTML=`<div class=itemHeader><span>${it.name}</span><button class=removeBtn>×</button></div>
+${it.img.width!==mw?`X:<input type=range min=0 max=${c.width} value=${it.x} id=xr${i}><input type=number value=${it.x} id=xn${i}>`:`<span>(X lock)</span>`}
+Y:<input type=range min=0 max=${c.height} value=${it.y} id=yr${i}><input type=number value=${it.y} id=yn${i}>
+<label>Layer:<select class=layerSelect id=z${i}>${items.map((_,j)=>`<option value=${j} ${j===it.z?'selected':''}>${j}</option>`).join('')}</select></label>`;
+ctrl.appendChild(d);
+const xr=d.querySelector(`#xr${i}`),xn=d.querySelector(`#xn${i}`),yr=d.querySelector(`#yr${i}`),yn=d.querySelector(`#yn${i}`),
+zSel=d.querySelector(`#z${i}`),rm=d.querySelector('.removeBtn');
+const uX=v=>{it.x=+v;if(xr)xr.value=xn.value=v;draw();},uY=v=>{it.y=+v;yr.value=yn.value=v;draw();},uZ=v=>{it.z=+v;draw();renderCtrl();};
+if(xr){xr.oninput=e=>uX(e.target.value);xn.oninput=e=>uX(e.target.value);}yr.oninput=e=>uY(e.target.value);yn.oninput=e=>uY(e.target.value);
+zSel.onchange=e=>uZ(+e.target.value);rm.onclick=()=>{items=items.filter(k=>k!==it);base=base.filter(b=>b.name!==it.name);renderCtrl();draw();};
+});}
+document.getElementById('autoTrim').onclick=()=>{
+  const w=c.width,h=c.height,d=x.getImageData(0,0,w,h).data;
+  let t=h,l=w,r=0,b=0,f=false;for(let y=0;y<h;y++)for(let i=0;i<w;i++){const a=d[(y*w+i)*4+3];
+    if(a>0){f=true;if(i<l)l=i;if(i>r)r=i;if(y<t)t=y;if(y>b)b=y;}}
+  if(!f)return alert('Không có pixel!');
+  const tw=r-l+1,th=b-t+1,g=x.getImageData(l,t,tw,th);c.width=tw;c.height=th;x.putImageData(g,0,0);items.forEach(i=>{i.x-=l;i.y-=t;});draw();
+};
+document.getElementById('refresh').onclick=()=>{if(!base.length)return;
+  const mw=Math.max(...base.map(i=>i.img.width)),th=base.reduce((a,b)=>a+b.img.height,0);
+  c.width=mw;c.height=th;items=base.map(o=>({...o}));renderCtrl();draw();
+};
+document.getElementById('downloadPng').onclick=()=>{c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);
+a.download='sprite_edit.png';a.click();URL.revokeObjectURL(a.href);});};
+f.onchange=load;
+</script>
+</body>
+</html>
