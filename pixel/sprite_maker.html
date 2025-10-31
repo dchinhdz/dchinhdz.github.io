@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Sprite Maker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>🧱 Sprite Maker</header>
+<main>
+  <input type="file" id="fileInput" multiple accept="image/*">
+  <div class="zoomBox">
+    <label>Zoom: <input type="range" id="zoom" min="0.5" max="3" step="0.1" value="1"></label>
+  </div>
+  <div id="canvasWrap"><canvas id="canvas"></canvas></div>
+  <div class="controls-top">
+    <button id="downloadPng">Download PNG</button>
+    <button id="downloadJson">Download JSON</button>
+  </div>
+  <pre id="jsonOut"></pre>
+</main>
+<script>
+const f=document.getElementById('fileInput'),c=document.getElementById('canvas'),x=c.getContext('2d'),
+o=document.getElementById('jsonOut'),z=document.getElementById('zoom');
+let imgs=[],scale=1,json={};
+z.oninput=()=>{scale=parseFloat(z.value);c.style.transform=`scale(${scale})`;c.style.transformOrigin='top center';};
+f.onchange=async e=>{
+  const fs=[...e.target.files].filter(f=>f.type.startsWith('image/'));imgs=[];
+  for(const f of fs){const img=new Image();img.src=URL.createObjectURL(f);await new Promise(r=>img.onload=r);imgs.push({name:f.name,img});}
+  if(!imgs.length)return;
+  const mw=Math.max(...imgs.map(i=>i.img.width)),th=imgs.reduce((a,b)=>a+b.img.height,0);
+  c.width=mw;c.height=th;x.clearRect(0,0,mw,th);let y=0,items={};
+  imgs.forEach(o=>{const px=(mw-o.img.width)/2;x.drawImage(o.img,px,y);items[o.name.replace(/\.[^.]+$/,'')]=[px,y,o.img.width,o.img.height];y+=o.img.height;});
+  const id=Math.floor(1000+Math.random()*9000);
+  json={info:{image:`sprite_${id}.png`,width:mw,height:th,count:imgs.length},items};
+  o.textContent=JSON.stringify(json,null,2);
+};
+document.getElementById('downloadPng').onclick=()=>{if(!c.width)return;const id=json.info?.image||'sprite.png';
+  c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=id;a.click();URL.revokeObjectURL(a.href);});};
+document.getElementById('downloadJson').onclick=()=>{if(!json.info)return;
+  const blob=new Blob([JSON.stringify(json,null,2)],{type:'application/json'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=json.info.image.replace('.png','.json');a.click();URL.revokeObjectURL(a.href);
+};
+</script>
+</body>
+</html>
